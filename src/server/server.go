@@ -5,6 +5,7 @@ import (
     "os"
     "bufio"
     "strings"
+    "net"
 )
 
 type Dictionary map[string]string
@@ -39,44 +40,109 @@ func main() {
 
     go manageDictionary(dict, get, add, remove, update, quit)
 
-    c := make(chan Reply)
-    get <- Request{"LOL", "", c}
-    fmt.Println(<- c)
+    listener, err := net.Listen("tcp", "0.0.0.0:6666")
+    if err != nil {
+        panic(err)
+    }
+     
+    for {
+        conn, err := listener.Accept()
+        if err != nil {
+            panic(err)
+        }
+
+        go handleClient(conn, get, add, remove, update)
+    }
+
 }
+
+func readMessage(conn net.Conn) (string, bool) {
+    buffer := make([]byte, 4096)
+    msg := ""
+
+    for {
+        bytesRead, err := conn.Read(buffer)
+        if err != nil {
+            panic(err)
+            return "", false
+        }
+
+        msg += string(buffer[:bytesRead])
+        if strings.Contains(msg, "\n") {
+            break
+        }
+    }
+
+    msg = strings.Replace(msg, "\r\n", "", 1)
+
+    return msg, true
+}
+
+func handleClient(conn net.Conn, get, add, remove, update chan Request) {
+    defer conn.Close()
+
+    msg, ok := readMessage(conn)
+    if !ok {
+        return
+    }
+
+    fmt.Println(msg)
+
+    replyChan := make(chan Reply)
+
+    switch msg[0] {
+    case '1': // get
+        key := msg[3:]
+        get <- Request{key, "", replyChan}
+        reply := <- replyChan
+        if reply.ok {
+            fmt.Fprintf(conn, "5: %s\r\n", reply.value)
+        } else {
+            fmt.Fprintf(conn, "7: Error\r\n")
+        }
+
+    case '2': // add
+    case '3': // remove
+    case '4': // update
+    case '8': // server get
+
+    }
+}
+
 
 func manageDictionary(dictionary Dictionary, get, add, remove, update chan Request, quit chan bool) {
     done := false
     for !done {
         select {
-            case req := <- get:
-                value, ok := dictionary[req.key]
-                req.replyChan <- Reply{value, ok}
-            case req := <- add:
-                _, present := dictionary[req.key]
-                if present {
-                    req.replyChan <- Reply{"", false}
-                } else {
-                    dictionary[req.key] = req.value
-                    req.replyChan <- Reply{"", true}
-                }
-            case req := <- remove:
-                _, present := dictionary[req.key]
-                if present { 
-                    req.replyChan <- Reply{"", false}
-                } else {
-                    delete(dictionary, req.key)
-                    req.replyChan <- Reply{"", true}
-                }
-            case req := <- update:
-                _, present := dictionary[req.key]
-                if !present { 
-                    req.replyChan <- Reply{"", false}
-                } else {
-                    dictionary[req.key] = req.value
-                    req.replyChan <- Reply{"", true}
-                }
-            case <- quit:
-                done = true
+        case req := <- get:
+            value, ok := dictionary[req.key]
+            req.replyChan <- Reply{value, ok}
+        case req := <- add:
+            _, present := dictionary[req.key]
+            if present {
+                req.replyChan <- Reply{"", false}
+            } else {
+                dictionary[req.key] = req.value
+                req.replyChan <- Reply{"", true}
+            }
+        case req := <- remove:
+            _, present := dictionary[req.key]
+            if present { 
+                req.replyChan <- Reply{"", false}
+            } else {
+                delete(dictionary, req.key)
+                req.replyChan <- Reply{"", true}
+            }
+        case req := <- update:
+            _, present := dictionary[req.key]
+            if !present { 
+                req.replyChan <- Reply{"", false}
+            } else {
+                dictionary[req.key] = req.value
+                req.replyChan <- Reply{"", true}
+            }
+        case <- quit:
+            done = true
         }
     }
 
