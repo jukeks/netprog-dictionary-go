@@ -119,28 +119,25 @@ func manageDictionary(dictionary Dictionary, get, add, remove, update chan Reque
             req.replyChan <- Reply{value, ok}
         case req := <- add:
             _, present := dictionary[req.key]
-            if present {
-                req.replyChan <- Reply{"", false}
-            } else {
+            if !present {
                 dictionary[req.key] = req.value
-                req.replyChan <- Reply{"", true}
             }
+
+            req.replyChan <- Reply{"", !present}
         case req := <- remove:
             _, present := dictionary[req.key]
-            if present { 
-                req.replyChan <- Reply{"", false}
-            } else {
+            if present {
                 delete(dictionary, req.key)
-                req.replyChan <- Reply{"", true}
             }
+
+            req.replyChan <- Reply{"", present}
         case req := <- update:
             _, present := dictionary[req.key]
-            if !present { 
-                req.replyChan <- Reply{"", false}
-            } else {
+            if present {
                 dictionary[req.key] = req.value
-                req.replyChan <- Reply{"", true}
             }
+
+            req.replyChan <- Reply{"", present}
         case <- quit:
             done = true
         }
