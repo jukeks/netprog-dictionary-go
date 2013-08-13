@@ -1,4 +1,6 @@
 netprog-dictionary-go
 =====================
 
-Learning Go by implemeting an old C programming excercise
+Learning Go by reimplemeting an Posix Network Programming excercise originally written in C.
+
+netprog-dictionary is a simple distributed key-value store.
