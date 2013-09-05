@@ -4,56 +4,64 @@ import (
     "os"
     "bufio"
     "strings"
+    "sync"
 )
 
-type Dictionary map[string]string
-
-type Reply struct {
-    value string
-    ok bool
+type Dictionary struct {
+    l sync.Mutex
+    m map[string]string
 }
 
-type Request struct {
-    key string
-    value string
-    replyChan chan Reply
+func NewDictionary() (Dictionary) {
+    d := Dictionary{}
+    d.m = make(map[string]string)
+
+    return d
 }
 
 
-func manageDictionary(dictionary Dictionary, get, add, remove, update chan Request, quit chan bool) {
-    done := false
-    for !done {
-        select {
-        case req := <- get:
-            value, ok := dictionary[req.key]
-            req.replyChan <- Reply{value, ok}
-        case req := <- add:
-            _, present := dictionary[req.key]
-            if !present {
-                dictionary[req.key] = req.value
-            }
-
-            req.replyChan <- Reply{"", !present}
-        case req := <- remove:
-            _, present := dictionary[req.key]
-            if present {
-                delete(dictionary, req.key)
-            }
-
-            req.replyChan <- Reply{"", present}
-        case req := <- update:
-            _, present := dictionary[req.key]
-            if present {
-                dictionary[req.key] = req.value
-            }
-
-            req.replyChan <- Reply{"", present}
-        case <- quit:
-            done = true
-        }
+func (d *Dictionary) Add(key, value string) (bool) {
+    d.l.Lock()
+    _, ok := d.m[key]
+    if !ok {
+        d.m[key] = value
     }
 
-    quit <- true
+    d.l.Unlock()
+
+    return !ok
+}
+
+func (d *Dictionary) Update(key, value string) (bool) {
+    d.l.Lock()
+    _, ok := d.m[key]
+    if ok {
+        d.m[key] = value
+    }
+
+    d.l.Unlock()
+
+    return ok
+}
+
+func (d *Dictionary) Get(key string) (string, bool) {
+    d.l.Lock()
+    value, ok := d.m[key]
+    d.l.Unlock()
+
+    return value, ok
+}
+
+func (d *Dictionary) Remove(key string) (bool) {
+    d.l.Lock()
+    _, ok := d.m[key]
+    if ok {
+        delete(d.m, key)
+    }
+
+    d.l.Unlock()
+
+    return ok
 }
 
 func parseDictionary(name string) (Dictionary) {
@@ -65,13 +73,13 @@ func parseDictionary(name string) (Dictionary) {
         }
     }()
 
-    d := make(Dictionary)
+    d := NewDictionary()
 
     scanner := bufio.NewScanner(file)
     for scanner.Scan() {
         line := scanner.Text()      
         words := strings.Split(line, "\t")
-        d[words[0]] = words[1]
+        d.m[words[0]] = words[1]
     }
 
     return d
