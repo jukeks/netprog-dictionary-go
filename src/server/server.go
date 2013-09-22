@@ -89,8 +89,8 @@ func handleClient(conn net.Conn, dict dictionary.Dictionary) {
 	protocol.WriteMessage(conn, retMsg)
 }
 
-func parseDictionary(name string) dictionary.Dictionary {
-	file, err := os.Open("src/server/" + name)
+func parseDictionary(filename string) dictionary.Dictionary {
+	file, err := os.Open(filename)
 	if err != nil {
 		panic(err)
 	}
